@@ -18,12 +18,22 @@
 package org.wso2.carbon.webapp.mgt;
 
 import org.apache.axis2.AxisFault;
-import org.apache.catalina.*;
+import org.apache.catalina.Container;
+import org.apache.catalina.Context;
+import org.apache.catalina.Engine;
+import org.apache.catalina.Host;
+import org.apache.catalina.LifecycleState;
+import org.apache.catalina.Manager;
+import org.apache.catalina.Session;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.CarbonException;
 import org.wso2.carbon.context.PrivilegedCarbonContext;
 import org.wso2.carbon.core.persistence.metadata.ArtifactMetadataException;
+import org.wso2.carbon.registry.core.Registry;
+import org.wso2.carbon.registry.core.Resource;
+import org.wso2.carbon.registry.core.exceptions.RegistryException;
 import org.wso2.carbon.tomcat.ext.utils.URLMappingHolder;
 import org.wso2.carbon.utils.CarbonUtils;
 import org.wso2.carbon.utils.FileManipulator;
@@ -74,7 +84,7 @@ public class WebApplication {
         String versionString = context.getName();
         if (context.getName().startsWith("/t/")) {
             //remove tenant context
-            versionString = versionString.substring(context.getName().lastIndexOf("/webapps/") + 9);
+            versionString = versionString.substring(StringUtils.ordinalIndexOf(context.getName(), "/", 4) + 1);
         } else if(context.getName().startsWith("/")) {
             versionString = versionString.substring(1);
         }
@@ -124,12 +134,11 @@ public class WebApplication {
     /**
      * Set ServletContext parameters for this webapp
      *
-     * @param parameters ServletContext params for this webapp
+     * @param parameters ServletContext attributes for this webapp
      */
     public void setServletContextParameters(List<WebContextParameter> parameters) {
         for (WebContextParameter parameter : parameters) {
-            context.getServletContext().setInitParameter(parameter.getName(),
-                    parameter.getValue()); // context-param in web.xml
+            context.getServletContext().setAttribute(parameter.getName(), parameter.getValue());
         }
     }
 
@@ -417,6 +426,9 @@ public class WebApplication {
                 !FileManipulator.deleteDir(webappDir)) {
             throw new CarbonException("exploded Webapp directory " + webappDir + " deletion failed");
         }
+
+        // remove webapp stopped state from the registry
+        removeWebappStoppedStatus(this);
 
     }
 
@@ -771,5 +783,30 @@ public class WebApplication {
     private String getWebappKey(){
         return hostName+":"+webappFile.getName();
     }
+
+    /**
+     * Removes webapp stopped entry from the registry
+     *
+     * @param webApplication WebApplication instance
+     */
+    private void removeWebappStoppedStatus(WebApplication webApplication) {
+        if (DataHolder.getRegistryService() != null) {
+            try {
+                Registry configSystemRegistry = DataHolder.getRegistryService().getConfigSystemRegistry(
+                        PrivilegedCarbonContext.getThreadLocalCarbonContext().getTenantId());
+                String webappResourcePath = WebAppUtils.getWebappResourcePath(webApplication);
+                if (configSystemRegistry.resourceExists(webappResourcePath)) {
+                    Resource webappResource = configSystemRegistry.get(webappResourcePath);
+                    if (webappResource.getProperty(WebappsConstants.WEBAPP_STATUS) != null) {
+                        webappResource.removeProperty(WebappsConstants.WEBAPP_STATUS);
+                        configSystemRegistry.put(webappResourcePath, webappResource);
+                    }
+                }
+            } catch (RegistryException e) {
+                log.error("Failed to remove persisted webapp stopped state for: " + webApplication.getContext());
+            }
+        }
+    }
+
 }
 

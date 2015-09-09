@@ -61,16 +61,17 @@
         if (expireAllSessions == null) {
             client.expireSessionsInWebapp(webappFileName, sessionIDs, hostName);
             CarbonUIMessage.sendCarbonUIMessage(bundle.getString("successfully.expired.selected.sessions"),
-                                                CarbonUIMessage.INFO, request);
+                    CarbonUIMessage.INFO, request);
 %>
 <script>
-    location.href = 'sessions.jsp?webappFileName=<%= URLEncoder.encode(webappFileName, "UTF-8") %>&pageNumber=<%= pageNumberInt %>'
+    location.href = 'sessions.jsp?webappFileName=<%= URLEncoder.encode(webappFileName, "UTF-8") %>' 
+                    + '&pageNumber=<%= pageNumberInt %>&hostName=<%= hostName %>'
 </script>
 <%
 } else {
-    client.expireAllSessionsInWebapp(hostName+":"+webappFileName);
+    client.expireAllSessionsInWebapp(hostName + ":" + webappFileName);
     CarbonUIMessage.sendCarbonUIMessage(bundle.getString("successfully.expired.all.sessions"),
-                                        CarbonUIMessage.INFO, request);
+            CarbonUIMessage.INFO, request);
 %>
 <script>
     location.href = 'index.jsp'
@@ -79,7 +80,8 @@
     }
 %>
 <script>
-    location.href = 'sessions.jsp?webappFileName=<%= URLEncoder.encode(webappFileName, "UTF-8") %>&pageNumber=<%= pageNumberInt %>'
+    location.href = 'sessions.jsp?webappFileName=<%= URLEncoder.encode(webappFileName, "UTF-8") %>'
+                    + '&pageNumber=<%= pageNumberInt %>&hostName=<%= hostName %>'
 </script>
 
 <%

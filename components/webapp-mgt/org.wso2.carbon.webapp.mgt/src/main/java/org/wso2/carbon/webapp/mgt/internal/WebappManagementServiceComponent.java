@@ -20,13 +20,13 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.osgi.service.component.ComponentContext;
 import org.wso2.carbon.CarbonConstants;
+import org.wso2.carbon.application.deployer.service.ApplicationManagerService;
 import org.wso2.carbon.base.ServerConfiguration;
 import org.wso2.carbon.core.ArtifactUnloader;
 import org.wso2.carbon.core.deployment.DeploymentSynchronizer;
-import org.wso2.carbon.registry.core.service.RegistryService;
+import org.wso2.carbon.registry.core.service.TenantRegistryLoader;
 import org.wso2.carbon.tomcat.ext.valves.CarbonTomcatValve;
 import org.wso2.carbon.tomcat.ext.valves.TomcatValveContainer;
-//import org.wso2.carbon.url.mapper.UrlMapperValve;
 import org.wso2.carbon.user.core.service.RealmService;
 import org.wso2.carbon.utils.CarbonUtils;
 import org.wso2.carbon.utils.ConfigurationContextService;
@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+
 /**
  * @scr.component name="org.wso2.carbon.webapp.mgt.internal.WebappManagementServiceComponent"
  * immediate="true"
@@ -56,13 +57,21 @@ import java.util.Map;
  * unbind="unsetConfigurationContextService"
  * @scr.reference name="user.realmservice.default" interface="org.wso2.carbon.user.core.service.RealmService"
  * cardinality="1..1" policy="dynamic" bind="setRealmService"  unbind="unsetRealmService"
- * @scr.reference name="registry.service" interface="org.wso2.carbon.registry.core.service.RegistryService"
- * cardinality="1..1" policy="dynamic"  bind="setRegistryService" unbind="unsetRegistryService"
  * @scr.reference name="depsych.service" interface="org.wso2.carbon.core.deployment.DeploymentSynchronizer"
  * cardinality="0..1" policy="dynamic"  bind="setDeploymentSynchronizerService" unbind="unsetDeploymentSynchronizerService"
+ * @scr.reference name="tenant.registryloader"
+ * interface="org.wso2.carbon.registry.core.service.TenantRegistryLoader"
+ * cardinality="1..1" policy="dynamic"
+ * bind="setTenantRegistryLoader"
+ * unbind="unsetTenantRegistryLoader"
+ * @scr.reference name="application.manager"
+ * interface="org.wso2.carbon.application.deployer.service.ApplicationManagerService"
+ * cardinality="0..1" policy="dynamic" bind="setAppManager" unbind="unsetAppManager"
  */
 public class WebappManagementServiceComponent {
     private static final Log log = LogFactory.getLog(WebappManagementServiceComponent.class);
+
+    private static ApplicationManagerService applicationManager;
 
     protected void activate(ComponentContext ctx) {
         try {
@@ -117,10 +126,11 @@ public class WebappManagementServiceComponent {
     protected void unsetRealmService(RealmService realmService) {
     }
 
-    protected void setRegistryService(RegistryService registryService) {
+    protected void setTenantRegistryLoader(TenantRegistryLoader tenantRegistryLoader) {
+        DataHolder.setTenantRegistryLoader(tenantRegistryLoader);
     }
 
-    protected void unsetRegistryService(RegistryService registryService) {
+    protected void unsetTenantRegistryLoader(TenantRegistryLoader tenantRegistryLoader) {
     }
 
     protected void setDeploymentSynchronizerService(DeploymentSynchronizer depSynchService) {
@@ -149,17 +159,25 @@ public class WebappManagementServiceComponent {
             servletContextParameters.add(serverUrlParam);
         }
 
-        for(WebApplicationsHolder webApplicationsHolder: webApplicationsHolderList.values()){
+        for (WebApplicationsHolder webApplicationsHolder : webApplicationsHolderList.values()) {
             if (webApplicationsHolder != null) {
-                for (WebApplication application :
-                        webApplicationsHolder.getStartedWebapps().values()) {
+                for (WebApplication application : webApplicationsHolder.getStartedWebapps().values()) {
                     application.getContext().getServletContext().
-                            setInitParameter(serverUrlParam.getName(),
-                                    serverUrlParam.getValue());
+                            setAttribute(serverUrlParam.getName(), serverUrlParam.getValue());
                 }
             }
 
         }
 
     }
+
+    protected void setAppManager(ApplicationManagerService applicationManager) {
+        this.applicationManager = applicationManager;
+        DataHolder.setApplicationManager(applicationManager);
+    }
+
+    protected void unsetAppManager(ApplicationManagerService appManager) {
+        applicationManager = null;
+    }
+
 }

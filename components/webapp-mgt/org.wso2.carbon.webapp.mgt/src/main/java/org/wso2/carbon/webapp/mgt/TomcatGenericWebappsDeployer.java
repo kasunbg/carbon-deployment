@@ -20,6 +20,7 @@ import org.apache.axis2.AxisFault;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.util.JavaUtils;
+import org.apache.catalina.Container;
 import org.apache.catalina.Context;
 import org.apache.catalina.Host;
 import org.apache.catalina.Manager;
@@ -28,20 +29,21 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.CarbonConstants;
 import org.wso2.carbon.CarbonException;
-import org.wso2.carbon.base.ServerConfiguration;
 import org.wso2.carbon.context.PrivilegedCarbonContext;
 import org.wso2.carbon.core.persistence.metadata.ArtifactMetadataException;
 import org.wso2.carbon.core.persistence.metadata.ArtifactMetadataManager;
 import org.wso2.carbon.core.persistence.metadata.ArtifactType;
 import org.wso2.carbon.core.persistence.metadata.DeploymentArtifactMetadataFactory;
-import org.wso2.carbon.core.session.CarbonTomcatClusterableSessionManager;
+import org.wso2.carbon.tomcat.CarbonTomcatException;
 import org.wso2.carbon.tomcat.api.CarbonTomcatService;
 import org.wso2.carbon.tomcat.ext.utils.URLMappingHolder;
+import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
+import org.wso2.carbon.webapp.mgt.session.CarbonTomcatClusterableSessionManager;
 import org.wso2.carbon.webapp.mgt.utils.WebAppUtils;
 
 import java.io.File;
 import java.lang.management.ManagementPermission;
-import java.util.HashMap;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,8 +63,8 @@ public class TomcatGenericWebappsDeployer {
     protected String tenantDomain;
     protected ConfigurationContext configurationContext;
     protected Map<String, WebApplicationsHolder> webApplicationsHolderMap;
-    protected Map<String, CarbonTomcatClusterableSessionManager> sessionManagerMap =
-            new ConcurrentHashMap<String, CarbonTomcatClusterableSessionManager>();
+    protected Map<String, Manager> sessionManagerMap =
+            new ConcurrentHashMap<String, Manager>();
 
     /**
      * Constructor
@@ -247,6 +249,58 @@ public class TomcatGenericWebappsDeployer {
                 webContextParams, applicationEventListeners);
     }
 
+    /**
+     *
+     * @param baseDir web application directory path
+     * @return host name that matches the directory path
+     */
+    private Host getMatchingVirtualHost(String baseDir) {
+        Host virtualHost = null;
+        Container[] virtualHosts = DataHolder.getCarbonTomcatService().getTomcat().getEngine().findChildren();
+        for (Container vHost : virtualHosts) {
+            Host childHost = (Host) vHost;
+            String appBase = childHost.getAppBase().replace("/", File.separator);
+            if (appBase.endsWith(File.separator)) {
+                appBase = appBase.substring(0, appBase.lastIndexOf(File.separator));
+            }
+
+            if (isWebappUploadedToVirtualAppBase(baseDir, appBase)) {
+                virtualHost = childHost;
+                break;
+            }
+        }
+        return virtualHost;
+    }
+
+    /**
+     *
+     * @param webAppBaseDir web application base path
+     * @return true if webapp is uploaded to Virtual Host
+     */
+    private boolean isWebappUploadedToVirtualAppBase(String webAppBaseDir, String appBase) {
+        String axis2Repo = MultitenantUtils.getAxis2RepositoryPath(this.tenantId);
+        String defaultWebAppPath = Paths.get(axis2Repo, CarbonConstants.WEBAPP_DEPLOYMENT_FOLDER).toString();
+        if (webAppBaseDir.equals(defaultWebAppPath)) {
+            return false;
+        } else {
+            String baseDir = appBase.substring(appBase.lastIndexOf(File.separator), appBase.length());
+            return (webAppBaseDir.contains(axis2Repo) && webAppBaseDir.endsWith(baseDir));
+        }
+    }
+
+    private Host getHost(String webappFilePath) throws CarbonTomcatException {
+        String baseDir = webappFilePath.substring(0, webappFilePath.lastIndexOf(File.separator));
+        Host defaultHost = (Host) DataHolder.getCarbonTomcatService().getTomcat().getEngine().findChild(
+                DataHolder.getCarbonTomcatService().getTomcat().getEngine().getDefaultHost());
+        Host virtualHost = getMatchingVirtualHost(baseDir);
+
+        if (virtualHost != null) {
+            return virtualHost;
+        } else {
+            return defaultHost;
+        }
+    }
+
     protected void handleWebappDeployment(File webappFile, String contextStr,
                                           List<WebContextParameter> webContextParams,
                                           List<Object> applicationEventListeners) throws CarbonException {
@@ -254,8 +308,9 @@ public class TomcatGenericWebappsDeployer {
                 PrivilegedCarbonContext.getThreadLocalCarbonContext();
         String filename = webappFile.getName();
         try {
-            Context context =
-                    DataHolder.getCarbonTomcatService().addWebApp(contextStr, webappFile.getAbsolutePath());
+            Context context = DataHolder.getCarbonTomcatService().addWebApp(getHost(webappFile.getAbsolutePath()),
+                                                                            contextStr, webappFile.getAbsolutePath());
+
             //deploying web app for url-mapper
             if (DataHolder.getHotUpdateService() != null) {
                 List<String> hostNames = DataHolder.getHotUpdateService().getMappigsPerWebapp(contextStr);
@@ -274,11 +329,16 @@ public class TomcatGenericWebappsDeployer {
                     getService().getContainer().getCluster()) != null) {
 
                 // Using clusterable manager
-                CarbonTomcatClusterableSessionManager sessionManager;
+                Manager sessionManager;
 
                 if (manager instanceof CarbonTomcatClusterableSessionManager) {
-                    sessionManager = (CarbonTomcatClusterableSessionManager) manager;
-                    sessionManager.setOwnerTenantId(tenantId);
+                    sessionManager = manager;
+                    ((CarbonTomcatClusterableSessionManager) manager).setOwnerTenantId(tenantId);
+                } else if (manager instanceof org.wso2.carbon.core.session.CarbonTomcatClusterableSessionManager) {
+                    //kept for backward compatibility. Remove once the session managers in carbon core are removed.
+                    sessionManager = manager;
+                    ((org.wso2.carbon.core.session.CarbonTomcatClusterableSessionManager) manager).
+                            setOwnerTenantId(tenantId);
                 } else {
                     sessionManager = new CarbonTomcatClusterableSessionManager(tenantId);
                     context.setManager(sessionManager);
@@ -286,7 +346,7 @@ public class TomcatGenericWebappsDeployer {
 
                 Object alreadyinsertedSMMap = configurationContext.getProperty(CarbonConstants.TOMCAT_SESSION_MANAGER_MAP);
                 if(alreadyinsertedSMMap != null){
-                    ((Map<String, CarbonTomcatClusterableSessionManager>) alreadyinsertedSMMap).put(context.getName(), sessionManager);
+                    ((Map<String, Manager>) alreadyinsertedSMMap).put(context.getName(), sessionManager);
                 }else{
                     sessionManagerMap.put(context.getName(), sessionManager);
                     configurationContext.setProperty(CarbonConstants.TOMCAT_SESSION_MANAGER_MAP,
@@ -296,12 +356,16 @@ public class TomcatGenericWebappsDeployer {
             } else {
                 if (manager instanceof CarbonTomcatSessionManager) {
                     ((CarbonTomcatSessionManager) manager).setOwnerTenantId(tenantId);
+                } else if (manager instanceof CarbonTomcatSessionPersistentManager){
+                    ((CarbonTomcatSessionPersistentManager) manager).setOwnerTenantId(tenantId);
+                    log.debug(manager.getInfo() +
+                             " enabled Tomcat HTTP Session Persistent mode using " +
+                             ((CarbonTomcatSessionPersistentManager) manager).getStore().getInfo());
                 } else {
                     context.setManager(new CarbonTomcatSessionManager(tenantId));
                 }
             }
 
-            context.setReloadable(false);
             WebApplication webapp = new WebApplication(this, context, webappFile);
             webapp.setServletContextParameters(webContextParams);
 
@@ -443,6 +507,7 @@ public class TomcatGenericWebappsDeployer {
         PrivilegedCarbonContext privilegedCarbonContext =
                 PrivilegedCarbonContext.getThreadLocalCarbonContext();
         Map<String, WebApplication> deployedWebapps = webApplicationsHolder.getStartedWebapps();
+        Map<String, WebApplication> stoppedWebapps = webApplicationsHolder.getStoppedWebapps();
         String fileName = webappFile.getName();
         if (deployedWebapps.containsKey(fileName)) {
             WebApplication deployWebapp = deployedWebapps.get(fileName);
@@ -450,6 +515,12 @@ public class TomcatGenericWebappsDeployer {
             privilegedCarbonContext.setApplicationName(
                     TomcatUtil.getApplicationNameFromContext(context.getBaseName()));
             deployWebapp.lazyUnload();
+        } else if (stoppedWebapps.containsKey(fileName)) {
+            WebApplication stoppedWebapp = stoppedWebapps.get(fileName);
+            Context context = stoppedWebapp.getContext();
+            privilegedCarbonContext.setApplicationName(
+                    TomcatUtil.getApplicationNameFromContext(context.getBaseName()));
+            stoppedWebapp.lazyUnload();
         }
 
         clearFaultyWebapp(webappFile.getAbsolutePath());
@@ -482,7 +553,7 @@ public class TomcatGenericWebappsDeployer {
      */
     protected String recievePersistedWebappMetaData(File webappFile, String propertyName) throws AxisFault, ArtifactMetadataException {
         AxisConfiguration axisConfig = configurationContext.getAxisConfiguration();
-        String artifactDir = generateMetaFileDirName(webappFile.getAbsolutePath());
+        String artifactDir = WebAppUtils.generateMetaFileDirName(webappFile.getAbsolutePath(), this.configurationContext);
         ArtifactType type = new ArtifactType(WebappsConstants.WEBAPP_FILTER_PROP, WebappsConstants.WEBAPP_METADATA_BASE_DIR +
                 File.separator + artifactDir);
         ArtifactMetadataManager manager = DeploymentArtifactMetadataFactory.getInstance(axisConfig).
@@ -501,7 +572,7 @@ public class TomcatGenericWebappsDeployer {
      */
     protected void setPersistedWebappMetaData(File webappFile, String propertyName, String value) throws AxisFault, ArtifactMetadataException {
         AxisConfiguration axisConfig = configurationContext.getAxisConfiguration();
-        String artifactDir = generateMetaFileDirName(webappFile.getAbsolutePath());
+        String artifactDir = WebAppUtils.generateMetaFileDirName(webappFile.getAbsolutePath(), this.configurationContext);
         ArtifactType type = new ArtifactType(WebappsConstants.WEBAPP_FILTER_PROP, WebappsConstants.WEBAPP_METADATA_BASE_DIR +
                 File.separator + artifactDir);
         ArtifactMetadataManager manager = DeploymentArtifactMetadataFactory.getInstance(axisConfig).
@@ -536,7 +607,7 @@ public class TomcatGenericWebappsDeployer {
             }
 
             AxisConfiguration axisConfig = configurationContext.getAxisConfiguration();
-            String artifactDir = generateMetaFileDirName(artifactFilePath);
+            String artifactDir = WebAppUtils.generateMetaFileDirName(artifactFilePath, this.configurationContext);
             ArtifactType type = new ArtifactType(WebappsConstants.WEBAPP_FILTER_PROP,
                     WebappsConstants.WEBAPP_METADATA_BASE_DIR +
                     File.separator + artifactDir);
@@ -603,8 +674,4 @@ public class TomcatGenericWebappsDeployer {
         return false;
     }
 
-    private String generateMetaFileDirName(String webappFilePath){
-        WebApplicationsHolder webApplicationsHolder = WebAppUtils.getWebappHolder(webappFilePath,this.configurationContext);
-        return webApplicationsHolder.getWebappsDir().getName();
-    }
 }

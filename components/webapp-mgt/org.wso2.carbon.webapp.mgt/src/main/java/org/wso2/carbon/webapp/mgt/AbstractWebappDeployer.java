@@ -35,6 +35,9 @@ import org.wso2.carbon.core.persistence.metadata.ArtifactMetadataException;
 import org.wso2.carbon.core.persistence.metadata.ArtifactMetadataManager;
 import org.wso2.carbon.core.persistence.metadata.ArtifactType;
 import org.wso2.carbon.core.persistence.metadata.DeploymentArtifactMetadataFactory;
+import org.wso2.carbon.registry.core.Registry;
+import org.wso2.carbon.registry.core.Resource;
+import org.wso2.carbon.registry.core.exceptions.RegistryException;
 import org.wso2.carbon.utils.CarbonUtils;
 import org.wso2.carbon.utils.deployment.GhostDeployerUtils;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
@@ -192,6 +195,23 @@ public abstract class AbstractWebappDeployer extends AbstractDeployer {
 
                 }
             }
+
+            // check whether the webapp should be stopped
+            WebApplicationsHolder webApplicationsHolder
+                    = WebAppUtils.getWebappHolder(deploymentFileData.getAbsolutePath(), configContext);
+            Map<String, WebApplication> startedWebapps = webApplicationsHolder.getStartedWebapps();
+            if (startedWebapps.containsKey(webappName)) {
+                WebApplication webApplication = startedWebapps.get(webappName);
+                if (isWebappStopped(webApplication)) {
+                    try {
+                        webApplicationsHolder.stopWebapp(webApplication);
+                    } catch (CarbonException e) {
+                        String msg = "Error while stopping the webapp (which was in stopped state): " + webappName;
+                        log.error(msg, e);
+                        throw new DeploymentException(msg, e);
+                    }
+                }
+            }
         }
     }
 
@@ -274,10 +294,11 @@ public abstract class AbstractWebappDeployer extends AbstractDeployer {
                 }
             } else {
                 if (isWatchedResourceChanged(fileName, unpackedFile)) {
-                    if (!warFile.exists()) {
-                        handleRedeployment(unpackedFile);
-                    } else {
-                        handleRedeployment(warFile);
+                    // if watchedResources are modified, reload the context
+                    Context context = getWebappContext(unpackedFile);
+                    if (context != null) {
+                        context.reload();
+                        log.info("Reloaded Context with name: " + context.getName());
                     }
                 }
             }
@@ -363,7 +384,7 @@ public abstract class AbstractWebappDeployer extends AbstractDeployer {
             bamStatsEnabled = "false";
         }
 
-        String artifactDir = generateMetaFileDirName(webApplication.getWebappFile().getAbsolutePath());
+        String artifactDir = WebAppUtils.generateMetaFileDirName(webApplication.getWebappFile().getAbsolutePath(), this.configContext);
         ArtifactType type = new ArtifactType(WebappsConstants.WEBAPP_FILTER_PROP, WebappsConstants.WEBAPP_METADATA_BASE_DIR
                 + File.separator + artifactDir);
         ArtifactMetadataManager manager = DeploymentArtifactMetadataFactory.getInstance(axisConfig).
@@ -485,14 +506,36 @@ public abstract class AbstractWebappDeployer extends AbstractDeployer {
         return false;
     }
 
-    private String generateMetaFileDirName(String webappFilePath){
-        WebApplicationsHolder webApplicationsHolder = WebAppUtils.getWebappHolder(webappFilePath,configContext);
-        return webApplicationsHolder.getWebappsDir().getName();
-    }
-
     protected void handleRedeployment(File file) throws DeploymentException {
         DeploymentFileData data = new DeploymentFileData(file, this);
         deploy(data);
+    }
+
+    /**
+     * Reads and returns the webapp stopped status from the registry
+     *
+     * @param webApplication WebApplication instance
+     * @return
+     */
+    private boolean isWebappStopped(WebApplication webApplication) {
+        if (DataHolder.getRegistryService() != null) {
+            try {
+                Registry configSystemRegistry = DataHolder.getRegistryService().getConfigSystemRegistry(
+                        PrivilegedCarbonContext.getThreadLocalCarbonContext().getTenantId());
+                String webappResourcePath = WebAppUtils.getWebappResourcePath(webApplication);
+
+                if (configSystemRegistry.resourceExists(webappResourcePath)) {
+                    Resource webappResource = configSystemRegistry.get(webappResourcePath);
+                    String webappStatus;
+                    if ((webappStatus = webappResource.getProperty(WebappsConstants.WEBAPP_STATUS)) != null) {
+                        return webappStatus.equalsIgnoreCase(WebappsConstants.WebappState.STOPPED);
+                    }
+                }
+            } catch (RegistryException e) {
+                log.error("Failed to read persisted webapp stopped state for: " + webApplication.getContext());
+            }
+        }
+        return false;
     }
 
 }

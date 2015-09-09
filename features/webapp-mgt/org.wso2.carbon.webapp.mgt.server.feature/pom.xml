@@ -15,14 +15,12 @@
  ~ limitations under the License.
 -->
 
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
     <parent>
-        <groupId>org.wso2.carbon</groupId>
+        <groupId>org.wso2.carbon.deployment</groupId>
         <artifactId>webapp-mgt-feature</artifactId>
-        <version>4.3.0-SNAPSHOT</version>
+        <version>4.5.3-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -30,24 +28,31 @@
     <artifactId>org.wso2.carbon.webapp.mgt.server.feature</artifactId>
     <packaging>pom</packaging>
     <name>WSO2 Carbon - Webapp Management Core Feature</name>
-    <version>4.3.0-SNAPSHOT</version>
+    <version>4.5.3-SNAPSHOT</version>
     <url>http://wso2.org</url>
     <description>This feature contains the core bundles required for Back-end Webapp Management functionality
     </description>
 
     <dependencies>
         <dependency>
-            <groupId>org.wso2.carbon</groupId>
+            <groupId>org.wso2.carbon.deployment</groupId>
             <artifactId>org.wso2.carbon.webapp.mgt</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.wso2.carbon</groupId>
+            <groupId>org.wso2.carbon.deployment</groupId>
             <artifactId>org.wso2.carbon.webapp.deployer</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.wso2.carbon</groupId>
+            <groupId>org.wso2.carbon.deployment</groupId>
             <artifactId>org.wso2.carbon.tomcat.patch</artifactId>
-            <version>4.3.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.wso2.carbon.deployment</groupId>
+            <artifactId>org.wso2.carbon.discovery.cxf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.wso2.carbon.identity</groupId>
+            <artifactId>org.wso2.carbon.identity.sso.agent</artifactId>
         </dependency>
     </dependencies>
 
@@ -55,7 +60,6 @@
         <plugins>
             <plugin>
                 <artifactId>maven-resources-plugin</artifactId>
-		<version>2.6</version>
                 <executions>
                     <execution>
                         <id>copy-resources</id>
@@ -102,9 +106,11 @@
                                 </properties>
                             </adviceFile>
                             <bundles>
-                                <bundleDef>org.wso2.carbon:org.wso2.carbon.webapp.mgt:${project.version}</bundleDef>
-                                <bundleDef>org.wso2.carbon:org.wso2.carbon.webapp.deployer</bundleDef>
-                                <bundleDef>org.wso2.carbon:org.wso2.carbon.tomcat.patch</bundleDef>
+                                <bundleDef>org.wso2.carbon.deployment:org.wso2.carbon.webapp.mgt:${carbon.deployment.version}</bundleDef>
+                                <bundleDef>org.wso2.carbon.deployment:org.wso2.carbon.webapp.deployer</bundleDef>
+                                <bundleDef>org.wso2.carbon.deployment:org.wso2.carbon.tomcat.patch</bundleDef>
+                                <bundleDef>org.wso2.carbon.deployment:org.wso2.carbon.discovery.cxf</bundleDef>
+                                <bundleDef>org.wso2.carbon.identity:org.wso2.carbon.identity.sso.agent</bundleDef>
                             </bundles>
                             <importFeatures>
                                 <importFeatureDef>org.wso2.carbon.core.server:${carbon.kernel.version}

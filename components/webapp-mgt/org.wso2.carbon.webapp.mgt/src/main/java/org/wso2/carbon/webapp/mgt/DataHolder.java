@@ -16,7 +16,10 @@
 package org.wso2.carbon.webapp.mgt;
 
 import org.apache.axis2.context.ConfigurationContext;
+import org.wso2.carbon.application.deployer.service.ApplicationManagerService;
 import org.wso2.carbon.core.deployment.DeploymentSynchronizer;
+import org.wso2.carbon.registry.core.service.RegistryService;
+import org.wso2.carbon.registry.core.service.TenantRegistryLoader;
 import org.wso2.carbon.tomcat.api.CarbonTomcatService;
 import org.wso2.carbon.url.mapper.HotUpdateService;
 import org.wso2.carbon.user.core.service.RealmService;
@@ -31,6 +34,9 @@ public class DataHolder {
     private static CarbonTomcatService carbonTomcatService;
     private static HotUpdateService hotUpdateService;
     protected static DeploymentSynchronizer deploymentSynchronizerService;
+    private static RegistryService registryService;
+    private static TenantRegistryLoader tenantRegistryLoader;
+    private static ApplicationManagerService applicationManager;
 
     public static RealmService getRealmService() {
         return realmService;
@@ -72,5 +78,29 @@ public class DataHolder {
 
     public static DeploymentSynchronizer getDeploymentSynchronizerService() {
         return DataHolder.deploymentSynchronizerService;
+    }
+
+    public static void setTenantRegistryLoader(TenantRegistryLoader tenantRegistryLoader) {
+        DataHolder.tenantRegistryLoader = tenantRegistryLoader;
+    }
+
+    public static TenantRegistryLoader getTenantRegistryLoader() {
+        return tenantRegistryLoader;
+    }
+
+    public static void setRegistryService(RegistryService registryService) {
+        DataHolder.registryService = registryService;
+    }
+
+    public static RegistryService getRegistryService() {
+        return registryService;
+    }
+
+    public static ApplicationManagerService getApplicationManager() {
+        return applicationManager;
+    }
+
+    public static void setApplicationManager(ApplicationManagerService applicationManager) {
+        DataHolder.applicationManager = applicationManager;
     }
 }

@@ -104,6 +104,14 @@
             }
             else if (webappState.equalsIgnoreCase("started")) {
                 webapp = client.getStartedWebapp(webappFileName,hostName);
+                if (webappType.equalsIgnoreCase("JaxWebapp")) {
+                    webAppDataExtractor.getServletXML(client.getWarFileInputStream
+                            (webapp.getWebappFile(), hostName, webappType));
+                    wsdlURLS= webAppDataExtractor.getWSDLs(urlPrefix + webapp.getContext() + servletContext);
+                    wadlURLS= webAppDataExtractor.getWADLs(urlPrefix + webapp.getContext() + servletContext);
+                    serviceListPath = webAppDataExtractor.getServiceListPath();
+                }
+
             } else {
                 webapp = client.getStoppedWebapp(webappFileName,hostName);
             }
@@ -147,7 +155,7 @@
         CARBON.showConfirmationDialog("<fmt:message key="session.expiry.selected.webapps.prompt"/>",
                                       function() {
                                           location.href = 'expire_sessions.jsp?webappKey=<%= hostName+':'+ URLEncoder.encode(webappFileName, "UTF-8")%>&redirectPage=webapp_info.jsp'
-                                                  +'&hostName=<%= hostName %>&httpPort=<%= httpPort %>';
+                                          + '&hostName=<%= hostName %>&httpPort=<%= httpPort %>&webappType=<%= webappType %>&defaultHostName=<%= defaultHostName %>';
                                       }
                 );
     }
@@ -156,7 +164,7 @@
         CARBON.showConfirmationDialog("<fmt:message key="reload.selected.webapps.prompt"/>",
                                       function() {
                                           location.href = 'reload_webapps.jsp?webappKey=<%= hostName+':'+ URLEncoder.encode(webappFileName, "UTF-8") %>&redirectPage=webapp_info.jsp'
-                                                  +'&hostName=<%= hostName %>&httpPort=<%= httpPort %>';
+                                                  +'&hostName=<%= hostName %>&httpPort=<%= httpPort %>&webappType=<%= webappType %>&defaultHostName=<%= defaultHostName %>';
                                       }
                 );
     }
@@ -165,7 +173,7 @@
         CARBON.showConfirmationDialog("<fmt:message key="stop.selected.webapps.prompt"/>",
                                       function() {
                                           location.href = 'stop_webapps.jsp?webappKey=<%= hostName+':'+URLEncoder.encode(webappFileName, "UTF-8") %>&redirectPage=webapp_info.jsp'
-                                                  +'&hostName=<%= hostName %>&httpPort=<%= httpPort %>';
+                                                  +'&hostName=<%= hostName %>&httpPort=<%= httpPort %>&defaultHostName=<%= defaultHostName %>';
                                       }
                 );
     }
@@ -174,7 +182,7 @@
         CARBON.showConfirmationDialog("<fmt:message key="start.selected.webapps.prompt"/>",
                                       function() {
                                           location.href = 'start_webapps.jsp?webappKey=<%=hostName+':'+ URLEncoder.encode(webappFileName, "UTF-8") %>&redirectPage=webapp_info.jsp'
-                                                  +'&hostName=<%= hostName %>&httpPort=<%= httpPort %>&webappType=<%= webappType %>';
+                                                  +'&hostName=<%= hostName %>&httpPort=<%= httpPort %>&webappType=<%= webappType %>&defaultHostName=<%= defaultHostName %>';
                                       }
                 );
     }
@@ -347,14 +355,18 @@
                                                     </a>
                                                     <nobr>
                                                         <form name="sessionExpiryForm" onsubmit="expireSessions();return false;" >
-                                                            <input type="hidden" name="webappFileName"
-                                                                   value="<%=  hostName+':'+ webappFileName%>"/>
+                                                            <input type="hidden" name="webappKey"
+                                                                   value="<%=  hostName+':'+ URLEncoder.encode(webappFileName, "UTF-8")%>"/>
                                                             <input type="hidden" name="redirectPage"
                                                                    value="webapp_info.jsp"/>
                                                             <input type="hidden" name="hostName"
                                                                    value="<%= hostName %>"/>
                                                             <input type="hidden" name="httpPort"
                                                                    value="<%= httpPort %>"/>
+                                                            <input type="hidden" name="webappType"
+                                                                   value="<%= webappType %>"/>
+                                                            <input type="hidden" name="defaultHostName"
+                                                                   value="<%= defaultHostName %>"/>
                                                             <label>
                                                                 &nbsp;<fmt:message key="with.idle"/> &ge;
                                                                 <input type="text" size="10" name="sessionExpiryTime"
@@ -685,14 +697,14 @@
                                 <%--</a>--%>
                                 <%--</td>--%>
                         </tr>
-                        <tr>
+                        <%--<tr>
                             <td>  <% /*System.out.println(URLEncoder.encode(wadlURLS.get(i).toString().replace("?_wadl", ""), "UTF-8"));
                                 System.out.println(wadlURLS.get(i).toString().substring(0,wadlURLS.get(i).toString().indexOf("services")));
                                 System.out.println(request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort() + " : "+ request.getContextPath());*/
                             %>
                                 <a href="<%=defaultPrefix%>/services?wadltryit&resourceurl=<%=URLEncoder.encode(wadlURLS.get(i).toString().replace("?_wadl", ""), "UTF-8")%>" class="icon-link" style="background-image:url(images/tryit.gif);" target="_blank">  Try this </a>
                             </td>
-                        </tr>
+                        </tr>--%>
                         <tr>
                             <td colspan="2" align="left">
                                 <strong><fmt:message key="endpoints"/></strong>
